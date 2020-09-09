@@ -8,9 +8,11 @@
 
 import Cocoa
 
-class ViewController: NSViewController {
-    
+class ViewController: NSViewController, NSWindowDelegate {
+
     @IBOutlet weak var mainnetIncomingImage: NSImageView!
+
+    @IBOutlet weak var lightningWindow: NSView!
     @IBOutlet weak var bitcoinCoreWindow: NSView!
     @IBOutlet weak var torWindow: NSView!
     @IBOutlet weak var bitcoinMainnetWindow: NSView!
@@ -63,7 +65,8 @@ class ViewController: NSViewController {
     @IBOutlet weak var regtestPeersIncomingLabel: NSTextField!
     @IBOutlet weak var regtestPeersOutgoingLabel: NSTextField!
     @IBOutlet weak var bitcoinIsOnHeaderImage: NSImageView!
-    
+    @IBOutlet weak var installLightningOutlet: NSButton!
+
     var rpcpassword = ""
     var rpcuser = ""
     var torHostname = ""
@@ -91,21 +94,30 @@ class ViewController: NSViewController {
     var testOn = Bool()
     var env = [String:String]()
     let d = Defaults()
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
         NotificationCenter.default.addObserver(self, selector: #selector(refreshNow), name: .refresh, object: nil)
         setScene()
     }
-    
+
+    override func viewWillAppear() {
+        self.view.window?.delegate = self
+        self.view.window?.minSize = NSSize(width: 710, height: 658)
+    }
+
     override func viewDidAppear() {
+        var frame = self.view.window!.frame
+        let initialSize = NSSize(width: 710, height: 658)
+        frame.size = initialSize
+        self.view.window?.setFrame(frame, display: true)
         refresh()
     }
-    
+
     @objc func refreshNow() {
         refresh()
     }
-    
+
     private func refresh() {
         d.setDefaults { [unowned vc = self] in
             vc.getLatestVersion { [unowned vc = self] success in
@@ -118,9 +130,51 @@ class ViewController: NSViewController {
             }
         }
     }
-    
+
     //MARK: User Action
-    
+
+    @IBAction func installLightningAction(_ sender: Any) {
+    }
+
+
+    @IBAction func openMainnetAuthAction(_ sender: Any) {
+        env = ["BINARY_NAME":d.existingBinary(),"VERSION":d.existingPrefix(),"PREFIX":d.existingPrefix(),"DATADIR":d.dataDir(), "AUTH_DIR":"/usr/local/var/lib/tor/standup/main/authorized_clients/"]
+        runScript(script: .openAuth)
+    }
+
+    @IBAction func openTestnetAuthAction(_ sender: Any) {
+        env = ["BINARY_NAME":d.existingBinary(),"VERSION":d.existingPrefix(),"PREFIX":d.existingPrefix(),"DATADIR":d.dataDir(), "AUTH_DIR":"/usr/local/var/lib/tor/standup/test/authorized_clients/"]
+        runScript(script: .openAuth)
+    }
+
+    @IBAction func openRegAuthAction(_ sender: Any) {
+        env = ["BINARY_NAME":d.existingBinary(),"VERSION":d.existingPrefix(),"PREFIX":d.existingPrefix(),"DATADIR":d.dataDir(), "AUTH_DIR":"/usr/local/var/lib/tor/standup/reg/authorized_clients/"]
+        runScript(script: .openAuth)
+    }
+
+
+    @IBAction func showMainWallets(_ sender: Any) {
+        DispatchQueue.main.async { [weak self] in
+            self?.chain = "main"
+            self?.performSegue(withIdentifier: "segueToWallets", sender: self)
+        }
+    }
+
+    @IBAction func showTestWallets(_ sender: Any) {
+        DispatchQueue.main.async { [weak self] in
+            self?.chain = "test"
+            self?.performSegue(withIdentifier: "segueToWallets", sender: self)
+        }
+    }
+
+    @IBAction func showRegWallets(_ sender: Any) {
+        DispatchQueue.main.async { [weak self] in
+            self?.chain = "regtest"
+            self?.performSegue(withIdentifier: "segueToWallets", sender: self)
+        }
+    }
+
+
     @IBAction func refreshAction(_ sender: Any) {
         taskDescription.stringValue = "checking system..."
         spinner.startAnimation(self)
@@ -128,7 +182,7 @@ class ViewController: NSViewController {
         taskDescription.alphaValue = 1
         refresh()
     }
-    
+
     @IBAction func removeAuthAction(_ sender: Any) {
         actionAlert(message: "Warning!", info: "Removing your authentication keys means anyone who gets your hidden service url will have access to it. Are you sure you want to remove all authentication keys?") { [unowned vc = self] response in
             if response {
@@ -137,17 +191,17 @@ class ViewController: NSViewController {
             }
         }
     }
-    
+
     private func addAuth() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.performSegue(withIdentifier: "addAuth", sender: vc)
         }
     }
-    
+
     @IBAction func addAuthAction(_ sender: Any) {
         addAuth()
     }
-    
+
     @IBAction func showMainConnect(_ sender: Any) {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.rpcport = "1309"
@@ -156,7 +210,7 @@ class ViewController: NSViewController {
             vc.performSegue(withIdentifier: "showPairingCode", sender: vc)
         }
     }
-    
+
     @IBAction func showTestConnect(_ sender: Any) {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.rpcport = "1310"
@@ -165,7 +219,7 @@ class ViewController: NSViewController {
             vc.performSegue(withIdentifier: "showPairingCode", sender: vc)
         }
     }
-    
+
     @IBAction func showRegConnect(_ sender: Any) {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.rpcport = "1311"
@@ -174,7 +228,7 @@ class ViewController: NSViewController {
             vc.performSegue(withIdentifier: "showPairingCode", sender: vc)
         }
     }
-    
+
     @IBAction func startMainnetAction(_ sender: Any) {
         startMainnetOutlet.isEnabled = false
         if !mainOn {
@@ -183,7 +237,7 @@ class ViewController: NSViewController {
             runScript(script: .stopMain)
         }
     }
-        
+
     @IBAction func startTestnetAction(_ sender: Any) {
         startTestnetOutlet.isEnabled = false
         if !testOn {
@@ -192,7 +246,7 @@ class ViewController: NSViewController {
             runScript(script: .stopTest)
         }
     }
-    
+
     @IBAction func startRegtestAction(_ sender: Any) {
         startRegtestOutlet.isEnabled = false
         if !regTestOn {
@@ -201,40 +255,40 @@ class ViewController: NSViewController {
             runScript(script: .stopReg)
         }
     }
-    
+
     @IBAction func showMainnetHiddenService(_ sender: Any) {
         runScript(script: .openMainnetHiddenService)
     }
-    
+
     @IBAction func showTestnetHiddenService(_ sender: Any) {
         runScript(script: .openTestnetHiddenService)
     }
-    
+
     @IBAction func showRegtestHiddenService(_ sender: Any) {
         runScript(script: .openRegtestHiddenService)
     }
-    
+
     @IBAction func bitcoinWindowHelp(_ sender: Any) {
         showAlertMessage(message: "Bitcoin Core Help", info: "GordianServer allows you to run multiple networks simultaneously which can be useful for development and testing purposes. Each network has a dedicated hidden service which gives you the ability to remotely connect to all 3 networks remotely. Just tap the QuickConnect button for whichever network you want to remotely connect to and scan the QR with supporting apps such as Gordian Wallet and Fully Noded. Mainnet is the main network where you can spend real Bitcoins, Testnet is a test network where you can connect to other nodes on the testnet3 network, which is useful for testing new features of Bitcoin Core that you may not be familiar with. Regtest is meant for developers who want to run a local network, it essentially gives you access to your own local Bitcoin blockchain, you can mine blocks easily and instantly and add multiple nodes all from your local dev environment. The verify button allows you to check the sha256 hash of the Bitcoin Core binary against what we expect it to be as per LaanWJ Vlaadmirs pgp signature. The install/update button will either setup GordianServer completely or update Bitcoin Core if there is a newer version available.")
     }
-    
+
     @IBAction func torWindowHelp(_ sender: Any) {
         showAlertMessage(message: "Tor Help", info: "This window gives you direct access to the three hidden service directories by tapping the forward button for each network. This is useful if you want to use your node's onion addresses for other apps. It is also useful if you want to refresh your hidden service which can be accomplished by deleting the hidden service directory altogether.  You may add and remove Tor v3 authenticaction keys from the \"add\" and \"remove\" button. You may add up to 330 auth keys to each hidden service. GordianServer by default adds the auth key to all three hidden services, if you tap \"remove\" it will remove auth from all three hidden services so use it with caution. The start/stop button allows you to start and stop tor. If Tor is stopped your node will not be reachable remotely. You may use the install/update button to install GordianServer or to update Tor.")
     }
-    
+
     @IBAction func torSettingsAction(_ sender: Any) {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.settingsOutlet.isHighlighted = false
             vc.performSegue(withIdentifier: "goToSettings", sender: vc)
         }
     }
-    
+
     @IBAction func goToSettings(_ sender: Any) {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.performSegue(withIdentifier: "goToSettings", sender: vc)
         }
     }
-    
+
     @IBAction func updateBitcoin(_ sender: Any) {
         if !bitcoinInstalled {
             installNow()
@@ -258,25 +312,25 @@ class ViewController: NSViewController {
             }
         }
     }
-    
+
     //MARK: User Action Installers, Starters and Configurators
-    
+
     @IBAction func verifyAction(_ sender: Any) {
         runScript(script: .verifyBitcoin)
     }
-    
+
     private func installNow() {
         startSpinner(description: "Fetching latest Bitcoin Core version...")
         FetchLatestRelease.get { [unowned vc = self] (dict, error) in
-            
+
             if error != "" {
                 vc.hideSpinner()
                 setSimpleAlert(message: "Error", info: "We had an error fetching the latest version of Bitcoin Core, please check your internet connection and try again", buttonLabel: "OK")
-                
+
             } else {
                 vc.hideSpinner()
                 let version = dict!["version"] as! String
-                
+
                 func standup() {
                     let pruned = vc.d.prune()
                     let txindex = vc.d.txindex()
@@ -285,18 +339,18 @@ class ViewController: NSViewController {
                     if pruned == 1 {
                         type = "pruned"
                     }
-                    
+
                     if txindex == 1 {
                         type = "fully indexed"
                     }
-                    
+
                     vc.showstandUpAlert(message: "Ready to StandUp?", info: "GordianServer will install and configure a \(type) Bitcoin Core v\(version) node and Tor v0.4.3.5\n\n~30gb of space needed for testnet and ~300gb for mainnet\n\nIf you would like to install a different node go to \"Settings\" for pruning, mainnet, data directory and tor related options, you can always adjust the settings and restart your node for the changes to take effect.\n\nGordianServer will create the following directory: /Users/\(NSUserName())/StandUp\n\nBy default it will create or if one exists add any missing rpc credentials to the bitcoin.conf in \(directory).")
                 }
-                
+
                 if vc.bitcoinInstalled {
-                    
+
                     actionAlert(message: "Install Bitcoin Core v\(version) and Tor with GordianServer?", info: "You have an exisiting version of Bitcoin Core installed.\n\nSelecting yes will tell GordianServer to download, verify and install a fresh Bitcoin Core v\(version) installation in ~/StandUp/BitcoinCore, GordianServer will not overwrite your existing node. Your existing bitcoin.conf file will be checked for rpc username and password, if none exist GordianServer will create them for you, all other bitcoin.conf settings will remain in place. GordianServer will also install Tor v0.4.3.5 and configure hidden services for your nodes rpcport so that you may easily and securely connect to your node remotely.") { response in
-                        
+
                         if response {
                             DispatchQueue.main.async { [unowned vc = self] in
                                 vc.standingUp = true
@@ -311,11 +365,11 @@ class ViewController: NSViewController {
             }
         }
     }
-    
+
     @IBAction func standUp(_ sender: Any) {
         installNow()
     }
-    
+
     @IBAction func installTorAction(_ sender: Any) {
         if !torIsOn {
             DispatchQueue.main.async { [unowned vc = self] in
@@ -324,7 +378,7 @@ class ViewController: NSViewController {
             }
             runScript(script: .startTor)
         } else {
-            
+
             DispatchQueue.main.async { [unowned vc = self] in
                 vc.startSpinner(description: "stopping tor...")
                 vc.installTorOutlet.isEnabled = false
@@ -332,37 +386,37 @@ class ViewController: NSViewController {
             runScript(script: .stopTor)
         }
     }
-    
+
     // MARK: Script Methods
-    
+
     private func checkForAuth() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.taskDescription.stringValue = "checking for auth..."
             vc.runScript(script: .checkForAuth)
         }
     }
-    
+
     func checkForXcodeSelect() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.taskDescription.stringValue = "checking for xcode select..."
             vc.runScript(script: .checkXcodeSelect)
         }
     }
-    
+
     func checkForHomebrew() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.taskDescription.stringValue = "checking for homebrew..."
             vc.runScript(script: .checkHomebrew)
         }
     }
-    
+
     func isBitcoinOn() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.taskDescription.stringValue = "checking if bitcoin core is running..."
             vc.runScript(script: .isMainOn)
         }
     }
-    
+
     func checkSigs() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.taskDescription.stringValue = "verifying pgp signatures..."
@@ -370,56 +424,56 @@ class ViewController: NSViewController {
             vc.hideSpinner()
         }
     }
-    
+
     func checkBitcoindVersion() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.taskDescription.stringValue = "checking if bitcoin core is installed..."
             vc.runScript(script: .checkForBitcoin)
         }
     }
-    
+
     func checkTorVersion() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.taskDescription.stringValue = "checking if tor is installed..."
             vc.runScript(script: .checkForTor)
         }
     }
-    
+
     func getTorrcFile() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.taskDescription.stringValue = "fetching torrc file..."
             vc.runScript(script: .getTorrc)
         }
     }
-    
+
     func checkBitcoinConfForRPCCredentials() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.taskDescription.stringValue = "getting rpc credentials..."
             vc.runScript(script: .getRPCCredentials)
         }
     }
-    
+
     func checkForStandUp() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.taskDescription.stringValue = "checking for StandUp directory..."
             vc.runScript(script: .checkStandUp)
         }
     }
-    
+
     func getTorHostName() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.taskDescription.stringValue = "getting tor hostname..."
             vc.runScript(script: .getTorHostname)
         }
     }
-    
+
     func isTorOn() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.taskDescription.stringValue = "checking tor status..."
             vc.runScript(script: .torStatus)
         }
     }
-    
+
     private func runScript(script: SCRIPT) {
         #if DEBUG
         print("script: \(script.rawValue)")
@@ -454,81 +508,81 @@ class ViewController: NSViewController {
         }
         parseScriptResult(script: script, result: result)
     }
-    
+
     //MARK: Script Result Filters
-    
+
     func parseScriptResult(script: SCRIPT, result: String) {
         switch script {
         case .stopMain:
             stopMainParse(result: result)
-            
+
         case .stopTest:
             stopTestParse(result: result)
-            
+
         case .stopReg:
             stopRegParse(result: result)
-            
+
         case .startMain:
             startMainParse(result: result)
-            
+
         case .startTestd:
             startTestParse(result: result)
-            
+
         case .startRegtest:
             startRegtestParse(result: result)
-            
+
         case .checkStandUp:
             checkStandUpParser(result: result)
-            
+
         case .isMainOn:
             parseIsMainOn(result: result)
-            
+
         case .isTestOn:
             parseIsTestOn(result: result)
-            
+
         case .isRegOn:
             parseIsRegtestOn(result: result)
-            
+
         case .checkForBitcoin:
             parseBitcoindResponse(result: result)
-            
+
         case .checkForTor:
             parseTorResult(result: result)
-            
+
         case .getRPCCredentials:
             checkForRPCCredentials(response: result)
-            
+
         case .getTorrc:
             checkIfTorIsConfigured(response: result)
-            
+
         case .getTorHostname:
             parseHostname(response: result)
-            
+
         case .torStatus:
             parseTorStatus(result: result)
-            
+
         case .verifyBitcoin:
             parseVerifyResult(result: result)
-            
+
         case .startTor, .stopTor:
             torStarted(result: result)
-            
+
         case .checkHomebrew:
             parseHomebrewResult(result: result)
-            
+
         case .checkXcodeSelect:
             parseXcodeSelectResult(result: result)
-            
+
         case .checkForAuth:
             parseAuthCheck(result: result)
-            
+
         case .checkForOldHost:
             parseOldHostResponse(result: result)
-            
+
         default: break
         }
     }
-    
+
     private func parseOldHostResponse(result: String) {
         if result.contains("Exists") {
             actionAlert(message: "You have an outdated version of GordianServer", info: "You need to run through the installation script again to configure your new Tor hidden services and to be able to run more then one network at a time, GordianServer may not function properly otherwise.") { [unowned vc = self] response in
@@ -541,7 +595,7 @@ class ViewController: NSViewController {
             checkForAuth()
         }
     }
-    
+
     private func parseAuthCheck(result: String) {
         if result.contains("Unauthenticated") && torConfigured && bitcoinConfigured {
             let ud = UserDefaults.standard
@@ -550,7 +604,7 @@ class ViewController: NSViewController {
             }
         }
     }
-    
+
     private func mainnetIsOff() {
         print("mainnet is off")
         DispatchQueue.main.async { [unowned vc = self] in
@@ -560,7 +614,7 @@ class ViewController: NSViewController {
             vc.startMainnetOutlet.isEnabled = true
         }
     }
-    
+
     private func testnetIsOff() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.testOn = false
@@ -569,7 +623,7 @@ class ViewController: NSViewController {
             vc.startTestnetOutlet.isEnabled = true
         }
     }
-    
+
     private func regtestIsOff() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.regTestOn = false
@@ -578,9 +632,9 @@ class ViewController: NSViewController {
             vc.startRegtestOutlet.isEnabled = true
         }
     }
-    
+
     //MARK: Script Result Parsers
-    
+
     private func stopMainParse(result: String) {
         if result.contains("Bitcoin Core stopping") {
             mainnetIsOff()
@@ -588,7 +642,7 @@ class ViewController: NSViewController {
             showAlertMessage(message: "Error turning off mainnet", info: result)
         }
     }
-    
+
     private func stopTestParse(result: String) {
         if result.contains("Bitcoin Core stopping") {
             testnetIsOff()
@@ -596,7 +650,7 @@ class ViewController: NSViewController {
             showAlertMessage(message: "Error turning off testnet", info: result)
         }
     }
-    
+
     private func stopRegParse(result: String) {
         if result.contains("Bitcoin Core stopping") {
             regtestIsOff()
@@ -604,7 +658,7 @@ class ViewController: NSViewController {
             showAlertMessage(message: "Error turning off regtest", info: result)
         }
     }
-    
+
     private func startTestParse(result: String) {
         startSpinner(description: "turning on testnet")
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [unowned vc = self] in
@@ -612,7 +666,7 @@ class ViewController: NSViewController {
             vc.hideSpinner()
         }
     }
-    
+
     private func startMainParse(result: String) {
         startSpinner(description: "turning on mainnet")
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [unowned vc = self] in
@@ -620,7 +674,7 @@ class ViewController: NSViewController {
             vc.hideSpinner()
         }
     }
-    
+
     private func startRegtestParse(result: String) {
         startSpinner(description: "turning on regtest")
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [unowned vc = self] in
@@ -628,7 +682,7 @@ class ViewController: NSViewController {
             vc.hideSpinner()
         }
     }
-    
+
     private func parseXcodeSelectResult(result: String) {
         hideSpinner()
         if result.contains("XCode select not installed") {
@@ -637,7 +691,7 @@ class ViewController: NSViewController {
             installNow()
         }
     }
-    
+
     private func parseHomebrewResult(result: String) {
         if result.contains("Homebrew not installed") {
             hideSpinner()
@@ -650,17 +704,16 @@ class ViewController: NSViewController {
             checkForXcodeSelect()
         }
     }
-    
+
     func checkStandUpParser(result: String) {
         if result.contains("False") {
             checkForHomebrew()
         } else {
             hideSpinner()
             runScript(script: .checkForOldHost)
-            //checkForAuth()
         }
     }
-    
+
     private func convertStringToDictionary(json: String) -> [String: AnyObject]? {
         if let data = json.data(using: .utf8) {
             do {
@@ -672,7 +725,7 @@ class ViewController: NSViewController {
         }
         return nil
     }
-    
+
     private func progress(dict: [String:AnyObject]) -> String {
         if let verificationprogress = dict["verificationprogress"] as? Double {
             if verificationprogress >= 0.99 {
@@ -684,12 +737,12 @@ class ViewController: NSViewController {
             return ""
         }
     }
-    
+
     private func parseIsMainOn(result: String) {
         if result.contains("Could not connect to the server 127.0.0.1") {
             mainnetIsOff()
         } else if result.contains("chain") || result.contains("Loading block index...") {
-            
+
             if result.contains("chain") {
                 if let dict = convertStringToDictionary(json: result) {
                     DispatchQueue.main.async { [unowned vc = self] in
@@ -697,7 +750,7 @@ class ViewController: NSViewController {
                     }
                 }
             }
-            
+
             DispatchQueue.main.async { [unowned vc = self] in
                 vc.mainOn = true
                 vc.mainnetIsOnImage.image = NSImage(imageLiteralResourceName: "NSStatusAvailable")
@@ -715,12 +768,12 @@ class ViewController: NSViewController {
         }
         runScript(script: .isTestOn)
     }
-    
+
     private func parseIsTestOn(result: String) {
         if result.contains("Could not connect to the server 127.0.0.1") {
             testnetIsOff()
         } else if result.contains("chain") || result.contains("Loading block index...") {
-            
+
             if result.contains("chain") {
                 if let dict = convertStringToDictionary(json: result) {
                     DispatchQueue.main.async { [unowned vc = self] in
@@ -728,7 +781,7 @@ class ViewController: NSViewController {
                     }
                 }
             }
-            
+
             DispatchQueue.main.async { [unowned vc = self] in
                 vc.testOn = true
                 vc.testnetIsOnImage.image = NSImage(imageLiteralResourceName: "NSStatusAvailable")
@@ -746,12 +799,12 @@ class ViewController: NSViewController {
         }
         runScript(script: .isRegOn)
     }
-    
+
     private func parseIsRegtestOn(result: String) {
         if result.contains("Could not connect to the server 127.0.0.1") {
             regtestIsOff()
         } else if result.contains("chain") || result.contains("Loading block index...") {
-            
+
             if result.contains("chain") {
                 if let dict = convertStringToDictionary(json: result) {
                     DispatchQueue.main.async { [unowned vc = self] in
@@ -759,7 +812,7 @@ class ViewController: NSViewController {
                     }
                 }
             }
-            
+
             DispatchQueue.main.async { [unowned vc = self] in
                 vc.regTestOn = true
                 vc.regtestIsOnImage.image = NSImage(imageLiteralResourceName: "NSStatusAvailable")
@@ -779,7 +832,7 @@ class ViewController: NSViewController {
             checkBitcoindVersion()
         }
     }
-    
+
     private func command(chain: String, command: String, completion: @escaping ((Any?)) -> Void) {
         let rpc = MakeRpcCall.shared
         var port:String!
@@ -797,7 +850,7 @@ class ViewController: NSViewController {
             completion((response))
         }
     }
-    
+
     func parseTorStatus(result: String) {
         if result.contains("started") {
             DispatchQueue.main.async { [unowned vc = self] in
@@ -823,7 +876,7 @@ class ViewController: NSViewController {
         }
         checkForStandUp()
     }
-    
+
     func torStarted(result: String) {
         var title = ""
         if result.contains("Successfully started") {
@@ -845,7 +898,7 @@ class ViewController: NSViewController {
             vc.installTorOutlet.isEnabled = true
         }
     }
-    
+
     func updateTorStatus(isOn: Bool) {
         if isOn {
             DispatchQueue.main.async { [unowned vc = self] in
@@ -859,7 +912,7 @@ class ViewController: NSViewController {
             }
         }
     }
-    
+
     func parseTorResult(result: String) {
         if result.contains("Tor version") {
             var version = (result.replacingOccurrences(of: "Tor version ", with: ""))
@@ -873,7 +926,7 @@ class ViewController: NSViewController {
         }
         checkBitcoinConfForRPCCredentials()
     }
-    
+
     func checkForRPCCredentials(response: String) {
         let bitcoinConf = response.components(separatedBy: "\n")
         for item in bitcoinConf {
@@ -901,7 +954,7 @@ class ViewController: NSViewController {
         }
         getTorrcFile()
     }
-    
+
     private func getPeerInfo() {
         command(chain: "test", command: "getpeerinfo") { response in
             if let peerInfoArray = response as? NSArray {
@@ -928,7 +981,7 @@ class ViewController: NSViewController {
             }
         }
     }
-    
+
     private func peerInfo(_ peerArray: NSArray) -> (in: String, out: String) {
         var incomingCount = 0
         var outgoingCount = 0
@@ -945,7 +998,7 @@ class ViewController: NSViewController {
         }
         return ("\(incomingCount)", "\(outgoingCount)")
     }
-    
+
     func checkIfTorIsConfigured(response: String) {
         if response.contains("HiddenServiceDir /usr/local/var/lib/tor/standup/") {
             DispatchQueue.main.async { [unowned vc = self] in
@@ -958,13 +1011,13 @@ class ViewController: NSViewController {
         }
         getTorHostName()
     }
-    
+
     func parseBitcoindResponse(result: String) {
         #if DEBUG
         print("parsebitcoindresponse")
         print("result = \(result)")
         #endif
-        
+
         if result.contains("Bitcoin Core Daemon version") || result.contains("Bitcoin Core version") {
             let arr = result.components(separatedBy: "Copyright (C)")
             var currentVersion = (arr[0]).replacingOccurrences(of: "Bitcoin Core Daemon version ", with: "")
@@ -1005,7 +1058,7 @@ class ViewController: NSViewController {
         }
         checkTorVersion()
     }
-    
+
     func parseHostname(response: String) {
         if !response.contains("No such file or directory") {
             let hostnames = response.split(separator: "\n")
@@ -1031,7 +1084,7 @@ class ViewController: NSViewController {
                     vc.torRegtestPathOutlet.isEnabled = false
                 }
             }
-            
+
         } else {
             DispatchQueue.main.async { [unowned vc = self] in
                 vc.connectMainnetOutlet.isEnabled = false
@@ -1044,7 +1097,7 @@ class ViewController: NSViewController {
         }
         isTorOn()
     }
-    
+
     func parseVerifyResult(result: String) {
         let binaryName = env["BINARY_NAME"] ?? ""
         if result.contains("\(binaryName): OK") {
@@ -1055,9 +1108,9 @@ class ViewController: NSViewController {
             showAlertMessage(message: "DANGER!!! Invalid signatures...", info: "Please delete the ~/StandUp folder and app and report an issue on the github, PGP signatures are not valid")
         }
     }
-    
+
     //MARK: User Inteface
-    
+
     func setEnv() {
         env = ["BINARY_NAME":d.existingBinary(),"VERSION":d.existingPrefix(),"PREFIX":d.existingPrefix(),"DATADIR":d.dataDir()]
         #if DEBUG
@@ -1065,11 +1118,11 @@ class ViewController: NSViewController {
         #endif
         isBitcoinOn()
     }
-    
+
     func showAlertMessage(message: String, info: String) {
         setSimpleAlert(message: message, info: info, buttonLabel: "OK")
     }
-    
+
     func startSpinner(description: String) {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.spinner.startAnimation(vc)
@@ -1078,7 +1131,7 @@ class ViewController: NSViewController {
             vc.taskDescription.alphaValue = 1
         }
     }
-    
+
     func hideSpinner() {
         DispatchQueue.main.async { [unowned vc = self] in
             vc.taskDescription.stringValue = ""
@@ -1087,7 +1140,7 @@ class ViewController: NSViewController {
             vc.taskDescription.alphaValue = 0
         }
     }
-    
+
     func setScene() {
         taskDescription.stringValue = "checking system..."
         spinner.startAnimation(self)
@@ -1104,8 +1157,9 @@ class ViewController: NSViewController {
         installTorOutlet.isEnabled = false
         verifyOutlet.isEnabled = false
         torRunningImage.alphaValue = 0
-        bitcoinCoreWindow.backgroundColor = #colorLiteral(red: 0.2313431799, green: 0.2313894629, blue: 0.2313401997, alpha: 1)
-        torWindow.backgroundColor = #colorLiteral(red: 0.2313431799, green: 0.2313894629, blue: 0.2313401997, alpha: 1)
+        bitcoinCoreWindow.backgroundColor = #colorLiteral(red: 0.1605761051, green: 0.1642630696, blue: 0.1891490221, alpha: 1)
+        torWindow.backgroundColor = #colorLiteral(red: 0.1605761051, green: 0.1642630696, blue: 0.1891490221, alpha: 1)
+        lightningWindow.backgroundColor = #colorLiteral(red: 0.1605761051, green: 0.1642630696, blue: 0.1891490221, alpha: 1)
         bitcoinMainnetWindow.backgroundColor = #colorLiteral(red: 0.2548701465, green: 0.2549202442, blue: 0.2548669279, alpha: 1)
         bitcoinTestnetWindow.backgroundColor = #colorLiteral(red: 0.2548701465, green: 0.2549202442, blue: 0.2548669279, alpha: 1)
         bitcoinRegtestWindow.backgroundColor = #colorLiteral(red: 0.2548701465, green: 0.2549202442, blue: 0.2548669279, alpha: 1)
@@ -1115,6 +1169,7 @@ class ViewController: NSViewController {
         torAuthWindow.backgroundColor = #colorLiteral(red: 0.2548701465, green: 0.2549202442, blue: 0.2548669279, alpha: 1)
         bitcoinCoreWindow.wantsLayer = true
         torWindow.wantsLayer = true
+        lightningWindow.wantsLayer = true
         bitcoinMainnetWindow.wantsLayer = true
         bitcoinTestnetWindow.wantsLayer = true
         bitcoinRegtestWindow.wantsLayer = true
@@ -1146,6 +1201,8 @@ class ViewController: NSViewController {
         bitcoinMainnetWindow.layer?.cornerRadius = 8
         torWindow.layer?.borderWidth = 0.75
         torWindow.layer?.cornerRadius = 8
+        lightningWindow.layer?.borderWidth = 0.75
+        lightningWindow.layer?.cornerRadius = 8
         bitcoinRegtestWindow.layer?.borderWidth = 0.75
         bitcoinRegtestWindow.layer?.cornerRadius = 8
         bitcoinTestnetWindow.layer?.borderWidth = 0.75
@@ -1169,6 +1226,7 @@ class ViewController: NSViewController {
         bitcoinTestnetWindow.layer?.borderColor = #colorLiteral(red: 0.501960814, green: 0.501960814, blue: 0.501960814, alpha: 1)
         bitcoinRegtestWindow.layer?.borderColor = #colorLiteral(red: 0.501960814, green: 0.501960814, blue: 0.501960814, alpha: 1)
         torWindow.layer?.borderColor = #colorLiteral(red: 0.501960814, green: 0.501960814, blue: 0.501960814, alpha: 1)
+        lightningWindow.layer?.borderColor = #colorLiteral(red: 0.501960814, green: 0.501960814, blue: 0.501960814, alpha: 1)
         torMainnetWindow.layer?.borderColor = #colorLiteral(red: 0.501960814, green: 0.501960814, blue: 0.501960814, alpha: 1)
         torTestnetWindow.layer?.borderColor = #colorLiteral(red: 0.501960814, green: 0.501960814, blue: 0.501960814, alpha: 1)
         torRegtestWindow.layer?.borderColor = #colorLiteral(red: 0.501960814, green: 0.501960814, blue: 0.501960814, alpha: 1)
@@ -1186,7 +1244,7 @@ class ViewController: NSViewController {
         regtestPeersIncomingLabel.stringValue = "?"
         regtestPeersOutgoingLabel.stringValue = "?"
     }
-    
+
     func showstandUpAlert(message: String, info: String) {
         DispatchQueue.main.async {
             actionAlert(message: message, info: info) { (response) in
@@ -1199,12 +1257,12 @@ class ViewController: NSViewController {
             }
         }
     }
-    
+
     func setLog(content: String) {
         let lg = Log()
         lg.writeToLog(content: content)
     }
-    
+
     private func getLatestVersion(completion: @escaping ((Bool)) -> Void) {
         print("getLatestVersion")
         FetchLatestRelease.get { [unowned vc = self] (dict, error) in
@@ -1224,13 +1282,13 @@ class ViewController: NSViewController {
             }
         }
     }
-    
+
     private func strap() {
         runScript(script: .launchStrap)
     }
-            
+
     // MARK: Segue Prep
-    
+
     override func prepare(for segue: NSStoryboardSegue, sender: Any?) {
         switch segue.identifier {
         case "showPairingCode":
@@ -1241,7 +1299,7 @@ class ViewController: NSViewController {
                 vc.rpcuser = rpcuser
                 vc.torHostname = torHostname
             }
-            
+
         case "goInstall":
             if let vc = segue.destinationController as? Installer {
                 vc.standingUp = standingUp
@@ -1249,7 +1307,7 @@ class ViewController: NSViewController {
                 vc.ignoreExistingBitcoin = ignoreExistingBitcoin
                 vc.strapping = strapping
             }
-            
+
         default:
             break
         }
