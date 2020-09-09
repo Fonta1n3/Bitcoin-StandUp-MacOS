@@ -66,7 +66,8 @@ class ViewController: NSViewController, NSWindowDelegate {
     @IBOutlet weak var regtestPeersOutgoingLabel: NSTextField!
     @IBOutlet weak var bitcoinIsOnHeaderImage: NSImageView!
     @IBOutlet weak var installLightningOutlet: NSButton!
-
+    
+    var chain = ""
     var rpcpassword = ""
     var rpcuser = ""
     var torHostname = ""
